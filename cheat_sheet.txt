@@ -1,0 +1,165 @@
+
+
+=======================================================
+Data registers (From https://www.cs.uaf.edu/2017/fall/cs301/reference/x86_64.html)
+=======================================================
+Order: rax rdi rsi rdx r8 r9
+
+
+Scratch registers
+RAX/EAX/AX/AH/AL   - primary accumulator    (for arithmetic operations such as mul and div, result is left here)
+RCX/ECX/CX/CH/CL   - used as count register for some instructions. syscall destroys RCX! (And R11))
+RDX/EDX/DX/DH/DL   - remainder stored here for div. destroyed by imul, mul, div, idiv etc. Make sure to set before using idiv / div       
+RSI/ESI/SI/SIL     -  
+RDI/EDI/DI/DIL     - 
+R8/R8D/R8W/R8B     - 
+R9/R9D/R9W/R9B     -
+R10/R10D/R10W/R10B - 
+R11/R11D/R11W/R11B -
+
+Preserved registers
+RBX/EBX/BX/BH/BL -    
+RSP              - stack pointer; points to base of stack
+RBP
+R12
+R13
+R14
+R15
+
+RIP - instruction pointer
+RSP - stack pointer          (points to address of top element in stack)
+RBP - base pointer
+
+
+DF  - direction flag
+IF  - interrupt flag
+SF  - sign flag
+ZF  - zero flag
+AF  - auxillary carry flag
+PF  - parity flag
+CF  - carry flag
+
+
+===============================================================
+instructions
+===============================================================
+equ : define a numeric constant, e.g.
+    CONSTANT_NAME equ 50
+    
+    can also be an expression, e.g.
+    
+    LENGTH equ 20
+    WIDTH  equ 10
+    AREA   equ length * width
+%assign: define a numeric constant (allows redefinition later) e.g.
+    %assign TOTAL 10
+    %assign  TOTAL  20
+
+%define: allows defining both numeric and string constants. similar to #define in C e.g.
+    %define PTR [EBP+4]
+    
+    
+mov: move a value to register
+    MOV DST SRC
+
+inc: increment an operand by one- either in register or memory
+    INC EBX	     ; Increments 32-bit register
+    INC DL       ; Increments 8-bit register
+    INC [count]  ; Increments the count variable
+    
+dec: decrement an operand by one
+
+add / sub:
+    ADD/SUB	destination, source sets or clears the overflow and carry flags when performing
+    
+mul/imul: (unsigned/signed) multiply rax by whatever value is passed, leaving the result in rax. Sets CF and OF.
+
+div/idiv: (unsigned/signed) divide rax by whatever value is passed, leaving the result (quotient) in rax, and the remainder in rdx. Sets CF and OF. Remember to clear rdx before use!
+
+    
+cmp: compare arg1 and arg2. Sets the zero flag and the carry flag.
+
+jg:  jump if arg1 greater than arg2
+jge: jump if arg1 greater than or equal to arg2
+jl: jump if arg1 less than arg2
+jz: jump if zero
+jnz: jump if non-zero
+
+
+
+=======================================================
+bytes
+=======================================================
+
+0h - null terminating byte for strings
+0Ah - linefeed
+
+=======================================================
+syscalls
+=======================================================
+In 32 bit, 'int 80h' is used instead of syscall.
+The register used for 
+eax -> rax
+ebx -> rdi
+ecx -> rsi
+edx -> rdx
+
+rax | Syscall    |         rdi           |    rsi                |     rdx
+-------------------------------------------------------------------------------------
+0   | sys_read   | uint fd               |    char *buff         |     size_t count
+1   | sys_write  | uint fd               |    const char *buff   |     size_t count
+2   | sys_open   | const char* filename  |    int flags          |
+3   | sys_close  | uint fd               |                       |
+60  | sys_exit   | uint errcode          |                       |
+
+
+SYSCALL_READ      equ 0
+SYSCALL_WRITE     equ 1
+SYSCALL_OPEN      equ 2
+SYSCALL_CLOSE     equ 3
+SYSCALL_EXIT      equ 60
+
+SYSCALL_STDIN     equ 0
+SYSCALL_STDOUT    equ 1
+SYSCALL_OPEN_R    equ 0
+SYSCALL_OPEN_W    equ 1
+SYSCALL_OPEN_RW   equ 2 
+
+
+=======================================================
+Variables and initialisations
+=======================================================
+DB	Define Byte	allocates 1 byte
+DW	Define Word	allocates 2 bytes
+DD	Define Doubleword	allocates 4 bytes
+DQ	Define Quadword	allocates 8 bytes
+DT	Define Ten Bytes	allocates 10 bytes
+Following are some examples of using define directives -
+
+choice		DB	'y'
+number		DW	12345
+neg_number	DW	-12345
+big_number	DQ	123456789
+real_number1	DD	1.234
+real_number2	DQ	123.456
+
+Multiple Initializations
+array_1  TIMES  9  DW  0  ;define an array of length 9, where each element is a word set to zero
+array_1 dq 108, 32, 9, 128, 422, 999
+
+
+RESB	Reserve a Byte
+RESW	Reserve a Word
+RESD	Reserve a Doubleword
+RESQ	Reserve a Quadword (use this for 64 bit arrays)
+REST	Reserve a Ten Bytes
+
+
+==========================================================
+Accessing arrays
+==========================================================
+[rsi] get the value at rsi
+[rsi + 1] get the value at 1 byte later
+[rsi + 8*rsi] get the value at 8 bytes later (e.g. when moving to 64 bit register)
+
+mov dword [rsi+1*4] ,5 ; set values in array
