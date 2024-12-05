@@ -10,169 +10,232 @@ global    _start
 section   .text
 
 ;----------------------------------------------------------
-; int64 load_arrays(rax=char* fpath, rdi = char* charBuffer, rsi = int64 char_buffer_size, rdx = int64* int_buffer_1, 
-;                    r8 = int64* int_buffer_2)
-;     loads the text file (containing two columns of numbers) and stores each row in the supplied int buffers
+; int64 load_arrays(rax=char* fpath, rdi = char* charBuffer, rsi = int64 char_buffer_size, rdx = int64* int_buffer_0, 
+;                   r8 = int64* int_buffer_1, r9 = int64* int_buffer_2)
+;   load the text file in to array_0, then splits it in two array_1 and array_2
 ; returns:
-;     rax = number of ints loaded in to each buffer
-;	  all other registers preserved 	
+;     rax = int64* int_array_1
+;     rdi = int64* int_array_2
+;     rsi = int64 array_length
 ;----------------------------------------------------------
-; rax will store the char buffer (the array containing the text file we loaded)
-; rdi will store the length of the string loaded
-; rsi will store int buffer 1    (where we will store the integers in the left hand column)
-; rdx will store int buffer 2    (where we will store the integers in the right hand column)
-; r8 will store the index we are at in the char buffer
-; r9 will store the length of the substring we are searching over
-; r10 will store if this is the left or right hand column
-; r11 will store the number of ints loaded into each array
-; r12 will be used for misc arithmetic
+; rax will store pointer to current int_array_0 element 
+; rdi will store pointer to current int_array_1 element (for the left column)
+; rsi will store pointer to current int_array_2 element (for the right column)
+; rdx will be used to check remainder
+; r8 will store the total number of element in array_0
+; r9 will store the index we are at in int array_0
+; r10 will be used for misc
 load_arrays:
-	push rdi
-	push rsi
-	push rdx
-	push r8
-	push r9
-	push r10
-	push r11
-	push r12
-	
-	; load buffer in to memory and determine how long the loaded string is
-     ; read_file_to_buffer(rax = char* fpath, rdi = char* buffer, rsi = int64 buffer_size)   
-	call read_file_to_buffer  ; rax, rdi, and rsi already correspond to the correct arguments for read_file_to_buffer
-     ; now, rax = char* buffer, rdi = length of string loaded
-     
-     call print_substr
-     
-     mov rsi, rdx              ; rsi is equal to buffer_1 pointer
-     mov rdx, r8               ; rdx is equal to buffer_2 pointer  
-     
-	mov r8, 0                 ; r8 is equal to starting index of substring
-	mov r9, 0                 ; r9 is equal to the length of the substring
-	mov r10,0                 ; r10 is equal to the current column (0=left, 1=right)
-	mov r11,0                 ; r11 is equal to the number of elements we have loaded in to each array 
-     
+    ; store registers
+    push rdx
+    push r8
+    push r9
+    push r10
+    push r8 ; storing another copy of array_1 so we can revert to starting position later
+    push r9 ; storing another copy of array_2 so we can revert to starting position later
+
+    
+    ; load_int_array_from_txt(rax=char* fpath, rdi = char* buffer,rsi = uint64 bufferSize, rdx = int64* int_array)
+    ; returns
+    ;    rax = int64* array_0
+    ;    rdi = int64 array_0_length
+    ; loads array in to array_0
+    call load_int_array_from_txt
+    push rdi    ; store array_0 length
+    mov rdi, r8 ; rdi = int64* array_1
+    mov rsi, r9 ; rsi = int64* array_2
+    pop r8      ; r8 = int64 array_0_length
+    mov r9, 0   ; r9 = current index
 .mainLoop:
-	call print_substr
-     call print_LF
-     call print_LF
+    cmp r9, r8  ; compare current index to number of element in array_0 
+    jge .finished
+    push rax    ; store array_0 pointer
+    mov rax, r9 ; rax = current_index
+    mov rdx, 0  ; clear remaineder 
+    mov r10, 2
+    div r10     ; divide current index by 2- remainder now in rdx 
+    cmp rdx, 0  ; check if remainder is 0 (i.e. current index is even)
+    je .indexIsEven
+    jmp .indexIsOdd
+        
+.indexIsEven:
+    mov rdx, rax ; store index/2 in rdx
+    pop rax      ; rax = array_0 again
+    mov r10, [rax] ; r10  = array_0[index]
+    mov [rdi], r10; array_1[index_1] = array_0[index_0]
+    inc r9
+    add rdi, 8
+    add rax, 8
+    jmp .mainLoop
 
-     cmp r8, rdi               ; compare the current index (r8) to the length of the string (rdi)
- 	jge .finished             ; if i >= str_length, exit
-	mov r9, 0				  ; set the length of the current substring to zero
-     jmp .substringSearchLoop
-.substringSearchLoop:
-	; check if we have reached the end of the string 
-	mov r12, r8
-	add r12, r9               ; r12 = starting index of substring + length of substring (i.e. the end position of the substring)
-	cmp r12, rdi              ; compare the end position of the string to the length of the string
-	jge .endOfSubstring       ; if end of substring >= length of string, jump to end of substring
-	mov r12, 0                ; clear r12
-	mov r12, [rax + rdi] ; r12 now equals char_buffer[i]
-	cmp r12, 48               ; numbers in ascii are only between 48 and 57 inclusive- anything else is invalid
-	jl .endOfSubstring
-	cmp r12, 57
-	jg .endOfSubstring
-	inc r9
-	jmp .substringSearchLoop
-	
-.endOfSubstring:
-	cmp r9, 0                 ; if the length of the substring found is zero, (e.g. the first char in the substring is non numeric)
-	je .invalidSubstringFound ; then jump to .invalidSubstringFound
-	; convert substring to int
-	push rax                  ; store the buffer
-	push rdi                  ; store the length of the string
-	add rax, r8               ; rax now points to the start of the string in the buffer
-	mov rdi, r9		       ; rdi now contains the length of the substring
-	call string_to_int        ; rax now contains the integer generated from the substring
-	mov r12, rax			  ; r12 now contains the next integer to add to the specified array
-	; restore rax and rdi registers
-     pop rdi                   ; rdi stores the length of the string again
-     pop rax                   ; rax stores pointer to buffer again
-     add r8, r9		       ; update the current index we are at in the string
-	mov r9, 0                 ; set the current substring length to zero
-	cmp r10,0                 ; if r10 == 0, this element belongs to the left hand column   
-	je .addLeftColumn
-	jmp .addRightColumm
-.invalidSubstringFound:
-	inc r8
-	jmp .mainLoop
-.addLeftColumn:
-	call print_lbracket
-	push rax
-	mov rax, r12
-	call print_int_LF
-	pop rax
-	
-	mov [rsi + r11*8], r12    ; move the new integer to the array
-	mov r10, 1                ; the next element is the right hand array now
-	jmp .mainLoop
-.addRightColumm:
-	call print_rbracket
-
-	push rax
-	mov rax, r12
-	call print_int_LF
-	pop rax
-
-	mov [rdx + r11*8], r12    ; move the new integer to the array
-	mov r10, 0                ; the next element is the left hand array now
-	inc r11					  ; increase the number of elements added to array by 1
-	jmp .mainLoop
+.indexIsOdd:
+    mov rdx, rax ; store index/2 in rdx
+    pop rax      ; rax = array_0 again
+    mov r10, [rax] ; r10  = array_0[index]
+    mov [rsi], r10 ; array_2[index//2] = array_0[index]
+    inc r9
+    add rsi, 8
+    add rax, 8
+    jmp .mainLoop
+    
 .finished:
-	mov rax, r11			  ; move the number of ints added to rax
-	pop r12
-	pop r11
-	pop r10
-	pop r9
-	pop r8
-	pop rdx
-	pop rdi
-	pop rsi
-	ret
-	
-part_1_test:
-	mov rax, msg_test
-	call print_str_LF
-	
-	mov rax, test_filepath
-	mov rdi, charBuffer
-	mov rsi, bufferSize
-	mov rdx, array_1
-	mov r8, array_2
-	call load_arrays ; rax now equals number of elements loaded to each array
-	;push rax
-	;mov rax, msg_array_1
-	;call print_str
-	;mov rax, array_1
-	;pop rdi ; rdi = length of array
-	;call print_int_array
-	;call print_LF
-	;mov rax, msg_array_2
-	;call print_str
-	;mov rax, array_2
-	;call print_int_array
-	;call print_LF
-	ret
+    ; calculate the number of elements from array_0_len / 2
+    mov rax, r9 ; rax = number of elements in array_0
+    mov rdx, 0  ; clear rdx
+    mov r10, 2
+    div r10     ; rax = array_1_length (= length of array_2)
+    mov rsi, rax    ; rsi = array_1_length
+    ; retrieve the pointers to the start of array_1 and array_2
+    pop  rdi; rdi = int64* array_2 (this is the extra copy of array_2 from r9 at the start of the function)
+    pop  rax ; rax = int64* array_1 (this is the extra copy of array_1 from r8 at the start of the function)
+    
+    ; sort array 1
+    mov rdx, rdi ; store array_2 in rdx
+    mov rdi, rsi ; rdi = array_1_length
+    call sort_array ; array_1 sorted
+    ; sort array 2
+    push rax ; store array_1 in stack
+    mov rax, rdx ; rax = array_2
+    call sort_array ; array_2 sorted
+    pop rax      ; rax = array_1 again
+    mov rdi, rdx ; rdi = array_2
+                 ; rsi still = array_length   
+    
+    
+    ; restore registers
+    pop r10
+    pop r9
+    pop r8
+    pop rdx
+    
+    ret
+
+;----------------------------------------------------------
+; int calculate_distance(rax=int64* array_1, rdi = int64* array_2, rsi = int64* n)
+;   calculates the sum of the distance for each element
+;----------------------------------------------------------
+;   rax will store pointer to array_1
+;   rdi will store pointer to array_2
+;   rsi will store length of arrays
+;   rdx will store current index
+;   r8 will store current sum
+;   r9 for misc maths
+calculate_distance:
+    ; store registers
+    push rdx
+    push r8
+    push r9
+    ; initialise values
+    mov rdx, 0  ; rdx = current index
+    mov r8, 0   ; r8 = sum
+.mainLoop
+    cmp rdx, rsi ; compare current index to array length
+    jge .finished ; if current index >= array length, jump
+    mov r9, [rax + 8*rdx]  ; r9 = array_1[index]
+    sub r9, [rdi + 8*rdx] ;  r9 = array_1[index] - array_2[index]   
+    ; take abs(x)
+    push rax
+    mov rax, r9
+    call int_abs
+    mov r9, rax 
+    pop rax
+    add r8, r9
+    inc rdx
+    jmp .mainLoop
+.finished
+    mov rax, r8
+    pop r9
+    pop r8
+    pop rdx
+    ret
+    
+;----------------------------------------------------------
+; void part_1(rax=char* fpath)
+;   runs part 1 for the given file
+;----------------------------------------------------------
+
+part_1:
+    ; print info text first
+    push rax
+    mov rax, msg_part_1
+    call print_str
+    pop rax
+    call print_str
+    call print_LF
+    
+    ;load_arrays(rax=char* fpath, rdi = char* charBuffer, rsi = int64 char_buffer_size, rdx = int64* int_buffer_0, 
+    ;                   r8 = int64* int_buffer_1, r9 = int64* int_buffer_2)
+    ; load arrays
+    mov rdi, char_buffer
+    mov rsi, buffer_size
+    mov rdx, array_0
+    mov r8, array_1
+    mov r9, array_2
+    call load_arrays
+    
+    ; new register values:
+    ; rax = int64* array_1
+    ; rdi = int64* array_2
+    ; rsi = int64 array_length	
+    
+    ; print the array length
+    push rax
+    mov rax, msg_array_len
+    call print_str
+    mov rax, rsi
+    call print_int_LF
+    pop rax
+    ; print array 1
+    push rax
+    mov rax, msg_array_1
+    call print_str
+    pop rax
+    push rdi
+    mov rdi, rsi
+    ;call print_int_array
+    call print_LF
+    pop rdi
+    ; print array 2
+    push rax
+    mov rax, msg_array_2
+    call print_str
+    mov rax, rdi
+    mov rdi, rsi
+    ;call print_int_array
+    call print_LF
+    mov rsi, rdi
+    mov rdi, rax
+    pop rax
+    ; calculate distance
+    call calculate_distance
+    push rax
+    mov rax, msg_disance
+    call print_str
+    pop rax
+    call print_int_LF
+
+    ret
 	
 _start:
-	call part_1_test
+    mov rax, input_filepath
+    call part_1
     call exit
     
 section   .data
 	input_filepath  db  "input_file.txt",0h
 	test_filepath  db  "test_file.txt",0h
 
-    msg_test    db "Test file: ", 0h
-	msg_input   db "Input file: ", 0h
-	msg_n_elems db "    Number of elements: ", 0h
-	msg_str_len db "    String length: ", 0h
+     msg_part_1  db "Part 1: Running file ", 0h
+     msg_array_len db "    Array length: ", 0h
 	msg_array_1 db "    Array 1: ", 0h
 	msg_array_2 db "    Array 2: ", 0h
-	
+	msg_disance db "    Distance: ", 0h
 
-	bufferSize equ 65536
-	charBuffer  TIMES  bufferSize    DB  0          ;uint8_t[8192]
-	array_1     TIMES  bufferSize    DQ  0          ;uint64_t[8192]
-	array_2     TIMES  bufferSize    DQ  0          ;uint64_t[8192]
+	
+	buffer_size equ 65536
+	char_buffer  TIMES  buffer_size    DB  0          ;uint8_t[8192]
+	array_0     TIMES  buffer_size    DQ  0          ;uint64_t[8192]
+     array_1     TIMES  buffer_size    DQ  0          ;uint64_t[8192]
+	array_2     TIMES  buffer_size    DQ  0          ;uint64_t[8192]
 
 		  

@@ -548,11 +548,12 @@ array_is_sorted:
 	pop rsi
 	pop rdi
 	ret
-	
+
+
 
 ;----------------------------------------------------------
-; bool sort_array(rax = int64* array, rdi = int64 array_size)
-;     sorts the given array in place
+; void sort_array(rax = int64* array, rdi = int64 array_size)
+;     sorts the given array in place. All registers preserved
 ;     
 ;     rax will contain the pointer to the array
 ;     rdi will contain the array length
@@ -598,3 +599,20 @@ sort_array:
 	pop rdx
 	pop rsi
 	ret
+
+;----------------------------------------------------------
+; int64 int_abs(rax = int64 x)
+;     returns the absolute value of x
+;----------------------------------------------------------
+int_abs:
+    push rdx
+    push rdi
+    cmp rax, 0
+    jge .finished
+    mov rdi, -1
+    imul rdi
+    jmp .finished
+.finished    
+    pop rdi
+    pop rdx    
+    ret
