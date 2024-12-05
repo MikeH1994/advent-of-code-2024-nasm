@@ -129,6 +129,32 @@ print_str:
     pop rdi
     pop rax
     ret
+	
+;----------------------------------------------------------
+; void print(rax = char* message, rdi = int64 str_len)
+; print string to stdout (without a linefeed at end)
+;----------------------------------------------------------
+print_substr:
+    push rax
+    push rdi
+    push rsi
+    push rdx
+    
+    ;for printing to stdout as syscall we want:
+    ;rax = SYSCALL_WRITE, rdi = SYSCALL_STDOUT, rsi = message ptr, rdx = strlen
+    
+    mov rsi,rax        ;move the str ptr to rsi first
+    mov rdx,rdi        ;move the string length to rdx
+    mov rax, SYSCALL_WRITE
+    mov rdi, SYSCALL_STDOUT
+    syscall
+    
+    ;pop stack back in order then exit
+    pop rdx
+    pop rsi
+    pop rdi
+    pop rax
+    ret
 
 ;----------------------------------------------------------
 ; void sprint_LF(char* message)
@@ -247,6 +273,7 @@ print_uint_LF:
 ;----------------------------------------------------------
 print_int_array:
 	; rax will store the integer we are going to print next
+     ; rdi will contain the buffer size
 	; rsi will contain the buffer pointer
 	; rdx will be the current index that we are going to print
 	push rax
@@ -256,11 +283,13 @@ print_int_array:
 	mov rdx, 0
 	call print_lbracket
 .mainLoop:
+	cmp rdx, rdi               ; if i >= buffer_size
+	jge .finished              ; jump to .finished
 	mov rax, [rsi + 8*rdx] 
 	call print_int
 	inc rdx
-	cmp rdx, rdi
-	jge .finished
+	cmp rdx, rdi               ; if i >= buffer_size
+	jge .finished              ; jump to .finished (this check here is to prevent a comma on last elem)
 	call print_comma
 	jmp .mainLoop
 .finished:
@@ -337,15 +366,17 @@ string_to_int:
 
 
 ;----------------------------------------------------------
-; void readFileToBuffer(rax=char* fpath, rdi = char* buffer,rsi = uint64 bufferSize)
-; read file to buffer pointer given in rdi
+; read_file_to_buffer(rax=char* fpath, rdi = char* buffer,rsi = uint64 bufferSize)
+;    read file to buffer pointer given in rdi.
+;    returns:
+;        rax = char* buffer
+;        rdi = int64 string_length
 ;----------------------------------------------------------
 
-readFileToBuffer:    
-    push rdi                ;store so we can restore on return
-    push rsi
-    push rdx
-    
+read_file_to_buffer:  
+    push rdx ; store rdx for later
+    push rsi ; store rsi for later
+          
     ;syscall 'open'-
     ;int open(const char *pathname, int flags);
     push rdi                ;store char buffer ptr for read call
@@ -356,7 +387,7 @@ readFileToBuffer:
     syscall                 ;rax now contains file descriptor
     
     ;syscall 'read'-
-    ;void read(uint fd, char* buff, uint count)
+    ;void read(rdi = uint file_descriptor, rsi = char* buffer, rdx = uint buffer_size)
     pop rdx                 ;store buffer size in rdx 
     pop rsi                 ;store char buffer ptr in rsi
     mov rdi,rax             ;store fd in rdi
@@ -364,15 +395,122 @@ readFileToBuffer:
     syscall
     
     ;syscall 'close'
-    ;void close(uint fd)
+    ;void close(rdi = uint fd)
     mov rax,SYSCALL_CLOSE   ;file descriptor already in rdi 
     syscall
     
-    pop rdx                 ;restore initial values
-    pop rsi
-    pop rdi
+    mov rax, rsi            ; move stack pointer to rax
+    push rax                ; store pointer on stack
+    call strlen             ; rax = length of string loaded
+    mov rdi, rax            ; rdi = length of string loaded
+    pop rax                 ; rax = buffer pointer
+    pop rsi                 ; restore rsi to initial value
+    pop rdx
     ret
 	
+
+;----------------------------------------------------------
+; load_int_array_from_txt(rax=char* fpath, rdi = char* buffer,rsi = uint64 bufferSize, rdx = int64* int_array)
+;    loads a text file in to the char buffer given in rdi, then converts this to an array of ints
+;    returns:
+;        rax = int64* array
+;        rdi = int64 array_length
+;----------------------------------------------------------
+; rax will store the char buffer (the array containing the text file we loaded)
+; rdi will store the length of the buffer loaded (ignoring any folllowing bytes unused)
+; rsi will store the int array we are writing to
+; rdx will store the index we are at in the char buffer
+; r8 will store the length of the substring we are searching over
+; r9 will store the current length of the loaded array
+; r10 will be used for misc arithmetic
+
+load_int_array_from_txt:
+	; load buffer in to memory and determine how long the loaded string is
+     ; read_file_to_buffer(rax = char* fpath, rdi = char* buffer, rsi = int64 buffer_size)   
+	call read_file_to_buffer  ; rax, rdi, and rsi already correspond to the correct arguments for read_file_to_buffer
+    ; now, rax = char* buffer, rdi = length of string loaded
+     
+    ; store current values so we can preserve the other registers upon return 
+    push rsi
+    push rdx
+    push r8
+    push r9
+    push r10
+
+    ; initialise registers
+    mov rsi, rdx ; rsi = int64* array
+    mov rdx, 0   ; rdx = int64 index
+    mov r8, 0    ; r8  = int64 substr_len
+    mov r9, 0    ; r9  = int64 array_len
+    mov r10, 0   ; r10 = misc 
+
+.mainLoop:
+    cmp rdx, rdi              ; compare the current index (rdx) to the length of the string (rdi)
+    jge .finished               ; if i >= buffer_length, exit
+    mov r8, 0				    ; set the length of the current substring to zero
+    jmp .substringSearchLoop    ; 
+.substringSearchLoop:
+    ; check if we have reached the end of the string 
+    push rdx                  ; store the starting position of the string
+    add rdx, r8               ; rdx = starting index of substring + length of substring (i.e. the end position of the substring)
+    cmp rdx, rdi              ; compare the end position of the substring to the length of the loaded string
+    pop rdx                   ; restore starting position of string
+    jge .endOfSubstring       ; if end of substring >= length of string, jump to end of substring
+    jmp .checkCharacter
+.checkCharacter:
+    push rax                        ; store pointer position
+    add rax, rdx                    ;
+    add rax, r8                     ; rax now points to char_buffer[i + substr_len]
+    mov r10, 0                      ; clear r10
+    mov r10b, byte[rax]             ; r10 now equals char_buffer[i + substr_len]
+    pop rax                         ; rax points to start of buffer again
+    cmp r10b, "+"                   ; check if plus
+    je .validCharacterFound         ; plus is accepted
+    cmp r10b, "-"                   ; check if minus
+    je .validCharacterFound         ; minus is accepted
+    cmp r10, 48                     ; numbers in ascii are only between 48 and 57 inclusive- anything else is invalid
+    jl .invalidCharacterFound       ;
+    cmp r10, 57                     ; 
+    jg .invalidCharacterFound       ;
+    jmp .validCharacterFound
+.validCharacterFound:
+    inc r8                    ; increase the substring length by 1
+    jmp .substringSearchLoop
+.invalidCharacterFound:
+    jmp .endOfSubstring
+.endOfSubstring:
+    cmp r8, 0                 ; check the length of the current substring
+    je .emptySubstringFound   ; if substr_len == 0
+    jmp .validSubstringFound  ; otherwise, substring valid
+.emptySubstringFound:   
+    inc rdx                   ; increment where we are starting the string from
+    jmp .mainLoop
+.validSubstringFound:
+    push rax                  ; store the buffer pointer 
+    push rdi                  ; store the buffer length
+    add rax, rdx              ; rax = pointer to the character we are starting at
+    mov rdi, r8               ; rdi = length of substring
+    call string_to_int        ; rax = integer
+    mov [rsi + 8*r9], rax     ; move the new integer to the next spot in the array
+    inc r9                    ; increase the array length counter
+    pop rdi                   ; restore the buffer length
+    pop rax                   ; restore the buffer pointer
+    add rdx, r8               ; move the start point of the new string forwards
+    jmp .mainLoop
+.finished:
+    mov rax, rsi              ; rax = int64* int_array
+    mov rdi, r9               ; rdi = int64 array_length
+    
+    ; restore registers
+    pop r10
+    pop r9
+    pop r8
+    pop rdx
+    pop rsi
+    
+    ret
+
+
 ;----------------------------------------------------------
 ; bool array_is_sorted(rax = int64* array, rdi = uint64 array_size)
 ;     returns true in rax if the array is sorted from smallest to largest

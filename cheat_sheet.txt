@@ -1,5 +1,3 @@
-
-
 =======================================================
 Data registers (From https://www.cs.uaf.edu/2017/fall/cs301/reference/x86_64.html)
 =======================================================
@@ -158,6 +156,11 @@ REST	Reserve a Ten Bytes
 ==========================================================
 Accessing arrays
 ==========================================================
+bufferSize equ 8192
+charBuffer  TIMES  bufferSize    DB  0          ;uint8_t[8192]
+digit_arr   TIMES  bufferSize    DQ  0          ;uint64_t[8192]
+
+
 [rsi] get the value at rsi
 [rsi + 1] get the value at 1 byte later
 [rsi + 8*rsi] get the value at 8 bytes later (e.g. when moving to 64 bit register)

@@ -9,27 +9,7 @@ global    _start
 
 section   .text
 
-test_print_arrays:
-	mov rax, msg_test_print_arrays
-	call print_str_LF
-	mov rax, array_1
-	mov rdi, 6
-	call print_int_array
-	ret
-	
-test_print_strings:
-	mov rax, msg_test_print_strings
-	call print_str_LF
-	call print_comma
-	call print_LF
-	mov rax, 24
-	call print_int
-	call print_LF
-	mov rax, [array_1+8]
-	call print_int
-	call print_LF
-	ret
-	
+
 ;----------------------------------------------------------
 ; void test_array_utils(r8 = int64* array, r9 = uint64 array_size)
 ;
@@ -68,9 +48,6 @@ _start:
 	mov r8, array_1
 	mov r9, 6
     call test_array_utils   
-	mov r8, array_2
-	mov r9, 9
-	call test_array_utils 
 	mov r8, array_2
 	mov r9, 9
 	call test_array_utils 
