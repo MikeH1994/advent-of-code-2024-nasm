@@ -56,8 +56,7 @@ load_arrays:
     div r10     ; divide current index by 2- remainder now in rdx 
     cmp rdx, 0  ; check if remainder is 0 (i.e. current index is even)
     je .indexIsEven
-    jmp .indexIsOdd
-        
+    jmp .indexIsOdd        
 .indexIsEven:
     mov rdx, rax ; store index/2 in rdx
     pop rax      ; rax = array_0 again
@@ -67,7 +66,6 @@ load_arrays:
     add rdi, 8
     add rax, 8
     jmp .mainLoop
-
 .indexIsOdd:
     mov rdx, rax ; store index/2 in rdx
     pop rax      ; rax = array_0 again
@@ -76,8 +74,7 @@ load_arrays:
     inc r9
     add rsi, 8
     add rax, 8
-    jmp .mainLoop
-    
+    jmp .mainLoop    
 .finished:
     ; calculate the number of elements from array_0_len / 2
     mov rax, r9 ; rax = number of elements in array_0
@@ -128,7 +125,7 @@ calculate_distance:
     ; initialise values
     mov rdx, 0  ; rdx = current index
     mov r8, 0   ; r8 = sum
-.mainLoop
+.mainLoop:
     cmp rdx, rsi ; compare current index to array length
     jge .finished ; if current index >= array length, jump
     mov r9, [rax + 8*rdx]  ; r9 = array_1[index]
@@ -137,24 +134,115 @@ calculate_distance:
     push rax
     mov rax, r9
     call int_abs
-    mov r9, rax 
+    mov r9, rax ; r9 = abs(array_1[index] - array_2[index])
     pop rax
     add r8, r9
     inc rdx
     jmp .mainLoop
-.finished
+.finished:
     mov rax, r8
     pop r9
     pop r8
     pop rdx
     ret
-    
+   
 ;----------------------------------------------------------
-; void part_1(rax=char* fpath)
-;   runs part 1 for the given file
+; int64 number_of_occurances_in_array(rax = int64* array, rdi = int64 array_length, rsi = int64 x)
+;     rax = n_occurances
 ;----------------------------------------------------------
+; rax will store the array we are checking
+; rdi will store the length of the array
+; rsi will store the value we are looking for in the array
+; rdx will store the index we are at
+; r8 will store the number of times we have foud this value
+number_of_occurances_in_array:
+    push rdx
+    push r8
+    push r9
 
-part_1:
+    mov rdx, 0 ; rdx = current_index
+    mov r8, 0  ; r8 = number of occurances found
+.mainLoop:
+    cmp rdx, rdi
+    jge .finished  ; if current index >= array length, got to exit
+    mov r9, [rax]  ; r9 = array[index]
+    cmp rsi, r9    ; compare value in array to the value we are looking for
+    jne .valuesNotEqual  ; if array[index] != x, jump
+    inc rdx        ; increment index
+    add rax, 8     ; move buffer pointer to next int
+    inc r8         ; value found, increase the counter by 1
+    jmp .mainLoop
+.valuesNotEqual:
+    inc rdx        ; increment index and move buffer pointer
+    add rax, 8     ; 
+    jmp .mainLoop
+.finished:   
+    mov rax, r8    ; rax = number of occurances found
+    pop r9
+    pop r8
+    pop rdx  
+    ret
+
+;----------------------------------------------------------
+; int calculate_distance(rax=int64* array_1, rdi = int64* array_2, rsi = int64* n)
+;   calculates the sum of the distance for each element times the number of times it appears in array_2
+;----------------------------------------------------------
+;   rax will store pointer to array_1
+;   rdi will store pointer to array_2
+;   rsi will store length of arrays
+;   rdx will store current index
+;   r8 will store current sum
+;   r9 for misc maths
+calculate_distance_2:
+    ; store registers
+    push rdx
+    push r8
+    push r9
+    ; initialise values
+    mov rdx, 0  ; rdx = current index
+    mov r8, 0   ; r8 = sum
+.mainLoop:
+    cmp rdx, rsi ; compare current index to array length
+    jge .finished ; if current index >= array length, jump
+    
+    push rax ; store current register values
+    push rdi
+    push rsi
+    push rdx
+    
+    mov r9, [rax + 8*rdx]  ; r9 = array_1[index]
+    
+    ; calculate the number of occurances of array_1[index] in array_2
+    ; rax = number_of_occurances_in_array(rax = int64* array, rdi = int64 array_length, rsi = int64 x)
+
+    mov rax, rdi ; rax = array_2
+    mov rdi, rsi ; rdi = length of array
+    mov rsi, r9  ; rsi = array_1[index]
+    call number_of_occurances_in_array ; rax = n_occurances
+    
+    imul r9       ; rax = n_occurances*array_1[index]
+    add r8, rax   ; add n_occurances*array_1[index] to current sum (r8)
+    
+    ; restore registers
+    pop rdx
+    pop rsi
+    pop rdi
+    pop rax
+    
+    inc rdx
+    jmp .mainLoop
+.finished:
+    mov rax, r8
+    pop r9
+    pop r8
+    pop rdx
+    ret
+                
+;----------------------------------------------------------
+; void run(rax=char* fpath)
+;   runs day 1 for the given file
+;----------------------------------------------------------
+run:
     ; print info text first
     push rax
     mov rax, msg_part_1
@@ -185,31 +273,20 @@ part_1:
     mov rax, rsi
     call print_int_LF
     pop rax
-    ; print array 1
-    push rax
-    mov rax, msg_array_1
-    call print_str
-    pop rax
-    push rdi
-    mov rdi, rsi
-    ;call print_int_array
-    call print_LF
-    pop rdi
-    ; print array 2
-    push rax
-    mov rax, msg_array_2
-    call print_str
-    mov rax, rdi
-    mov rdi, rsi
-    ;call print_int_array
-    call print_LF
-    mov rsi, rdi
-    mov rdi, rax
-    pop rax
-    ; calculate distance
+
+    ; calculate distance (for part 1)
     call calculate_distance
     push rax
-    mov rax, msg_disance
+    mov rax, msg_distance_1
+    call print_str
+    pop rax ; rax = distance
+    call print_int_LF
+    
+    ; calculate distance_2 (for part 2)
+    mov rax, array_1
+    call calculate_distance_2
+    push rax
+    mov rax, msg_distance_2
     call print_str
     pop rax
     call print_int_LF
@@ -217,25 +294,25 @@ part_1:
     ret
 	
 _start:
+    mov rax, test_filepath
+    call run
     mov rax, input_filepath
-    call part_1
+    call run
     call exit
     
 section   .data
 	input_filepath  db  "input_file.txt",0h
 	test_filepath  db  "test_file.txt",0h
 
-     msg_part_1  db "Part 1: Running file ", 0h
+     msg_part_1  db "Day 01: Running file ", 0h
      msg_array_len db "    Array length: ", 0h
 	msg_array_1 db "    Array 1: ", 0h
 	msg_array_2 db "    Array 2: ", 0h
-	msg_disance db "    Distance: ", 0h
+	msg_distance_1 db "    Distance (1): ", 0h
+	msg_distance_2 db "    Distance (2): ", 0h
 
-	
 	buffer_size equ 65536
 	char_buffer  TIMES  buffer_size    DB  0          ;uint8_t[8192]
 	array_0     TIMES  buffer_size    DQ  0          ;uint64_t[8192]
      array_1     TIMES  buffer_size    DQ  0          ;uint64_t[8192]
 	array_2     TIMES  buffer_size    DQ  0          ;uint64_t[8192]
-
-		  

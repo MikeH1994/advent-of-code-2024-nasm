@@ -612,7 +612,8 @@ int_abs:
     mov rdi, -1
     imul rdi
     jmp .finished
-.finished    
+.finished:  
     pop rdi
     pop rdx    
     ret
+
