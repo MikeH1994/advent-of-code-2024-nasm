@@ -184,8 +184,8 @@ number_of_occurances_in_array:
     ret
 
 ;----------------------------------------------------------
-; int calculate_distance(rax=int64* array_1, rdi = int64* array_2, rsi = int64* n)
-;   calculates the sum of the distance for each element times the number of times it appears in array_2
+; int calculate_distance_2(rax=int64* array_1, rdi = int64* array_2, rsi = int64* n)
+;   calculates the total distance as described in part_2
 ;----------------------------------------------------------
 ;   rax will store pointer to array_1
 ;   rdi will store pointer to array_2
